@@ -1,7 +1,10 @@
 package com.gordonkwame.downloadtest;
 
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
@@ -58,8 +61,52 @@ public class MainActivity extends AppCompatActivity {
         schoolListViewAdapter = new ArrayAdapter<>(this,
                 R.layout.list_schools, parsedSchoolArrayList);
 
-        new AsyncTaskGetSchoolList().execute(); // ASYNCTASK FOR GETTING LIST OF SCHOOLS  (TO AVOID RUNNING ON MAIN THREAD AND AVOID "Application not Responding)
+        // CHECK IF AN INTERNET CONNECTION IS AVAILABLE
+        if (isNetworkAvailable())
+        {
+            new AsyncTaskGetSchoolList().execute(); // ASYNCTASK FOR GETTING LIST OF SCHOOLS  (TO AVOID RUNNING ON MAIN THREAD AND AVOID "Application not Responding)
+            Log.i("NETWORK", "Internet connection available");
+        }
+
+        else
+        {
+            noInternetConnectionDialog();
+            dismissInitLoadingSpinner();
+            Log.i("NETWORK", "No internet connection available");
+        }
     }
+
+
+
+    protected void noInternetConnectionDialog()
+    {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(this);
+
+
+        alertDialogBuilder.setMessage("No internet connection available. Try again?");
+        alertDialogBuilder.setCancelable(false);
+        alertDialogBuilder.setPositiveButton("Reload",
+                new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface arg0, int arg1) {
+                new AsyncTaskGetSchoolList().execute();
+            }
+        });
+
+        alertDialogBuilder.setNegativeButton("Exit",
+                new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface arg0, int arg1) {
+                finish();
+                System.exit(0);
+            }
+        });
+
+        AlertDialog alertDialog = alertDialogBuilder.create();
+        alertDialog.show();
+    }
+
+
 
     // LOAD DIALOG SPINNER AT STARTUP
     protected void initLoadingSpinner()
@@ -73,11 +120,18 @@ public class MainActivity extends AppCompatActivity {
 
 
 
+
+
     // DISMISS DIALOG SPINNER
     protected void dismissInitLoadingSpinner()
     {
-        downloadProgressDialog.dismiss();
+        if (downloadProgressDialog.isShowing())
+        {
+            downloadProgressDialog.dismiss();
+        }
     }
+
+
 
 
     // OPEN CONNECTION TO APPROPRIATE URL
@@ -91,8 +145,7 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-
-
+    // ASYNCTASK FOR GETTING SCHOOL LIST
     private class AsyncTaskGetSchoolList extends AsyncTask<String, String, String> {
 
         @Override
@@ -181,6 +234,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    // ASYNCTASK FOR GETTING SAT SCORES WHEN A SCHOOL IS SELECTED
     private class AsyncTaskGetSAT extends AsyncTask<String, String, String> {
 
         @Override
@@ -241,9 +295,22 @@ public class MainActivity extends AppCompatActivity {
 
             } catch (Exception e) {
                 e.printStackTrace();
-                Toast.makeText(getApplicationContext(), "Sorry. Currently unable to display scores", Toast.LENGTH_LONG).show();
-            }
 
+                // IF INTERNET CONNECTION IS UNAVAILABLE WHEN A SCHOOL IS SELECTED
+                MainActivity.this.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (isNetworkAvailable())
+                        {
+                            Toast.makeText(getApplicationContext(), "Currently unable to display scores", Toast.LENGTH_LONG).show();
+                        }
+                        else
+                        {
+                            unableSATScoresSchoolDialog(); // DIALOG BOX FOR ERROR MESSAGE AND ASKING USER TO PLEASE CHECK INTERNET CONNECTION
+                        }
+                    }
+                });
+            }
             return null;
         }
     }
@@ -292,6 +359,30 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+
+
+    // IF NO INTERNET CONNECTION IS AVAILABLE WHEN TRYING TO DISPLAY SCORES FOR A SELECTED SCHOOL, DISPLAY AN ERROR MESSAGE IN A DIALOG BOX
+    protected void unableSATScoresSchoolDialog() {
+        final AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(this);
+
+        alertDialogBuilder.setMessage("Unable to display SAT scores for this school. Please check your internet connection.");
+        alertDialogBuilder.setCancelable(false);
+        alertDialogBuilder.setPositiveButton("Done",
+                new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface theDialog, int arg1) {
+                theDialog.dismiss();
+            }
+        });
+
+        AlertDialog alertDialog = alertDialogBuilder.create();
+        alertDialog.show();
+    }
+
+
+
+
     // IF SCHOOL DATA CANNOT BE LOADED TO THE ARRAYLIST, LET USER DECIDE IF THEY WANT TO TRY AGAIN
     protected void refreshOrExitDialog()
     {
@@ -320,5 +411,18 @@ public class MainActivity extends AppCompatActivity {
             AlertDialog alertDialog = alertDialogBuilder.create();
             alertDialog.show();
         }
+    }
+
+
+    // CHECK IF ANY FORM OF INTERNET CONNECTION IS AVAILABLE
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = null;
+
+        if (connectivityManager != null) {
+            activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        }
+
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
     }
 }
